@@ -1,10 +1,10 @@
 flask
 flask-httpauth
-pyside6
 pandas
 qrcode[pil]
 bcrypt
 apscheduler
 python-dotenv
 sendgrid
-pyqtgraph
+fastapi
+uvicorn
