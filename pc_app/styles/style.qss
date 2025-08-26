@@ -1,0 +1,128 @@
+/* High-tech dark theme with neon accents */
+QMainWindow, QWidget {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1a1a2e, stop:1 #162447);
+}
+
+/* Ensure centralWidget inherits the gradient */
+QWidget#centralWidget {
+    background: transparent;
+}
+
+/* Buttons with neon glow effect */
+QPushButton {
+    background-color: #0a3d62;
+    color: #e0fbfc;
+    border: 2px solid #00f5d4;
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+QPushButton:hover {
+    background-color: #3c6997;
+    border: 2px solid #00ffdd;
+    box-shadow: 0 0 10px #00ffdd;
+}
+
+QPushButton:pressed {
+    background-color: #094074;
+}
+
+/* Input fields with futuristic look */
+QLineEdit {
+    background-color: #2a2a4e;
+    color: #e0fbfc;
+    border: 1px solid #00f5d4;
+    border-radius: 5px;
+    padding: 8px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+}
+
+QLineEdit:focus {
+    border: 2px solid #00ffdd;
+    box-shadow: 0 0 8px #00ffdd;
+}
+
+/* ComboBox styling */
+QComboBox {
+    background-color: #2a2a4e;
+    color: #e0fbfc;
+    border: 1px solid #00f5d4;
+    border-radius: 5px;
+    padding: 8px;
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+}
+
+QComboBox::drop-down {
+    border: none;
+}
+
+QComboBox::down-arrow {
+    image: url(:/icons/down_arrow.png);
+    width: 10px;
+    height: 10px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #2a2a4e;
+    color: #e0fbfc;
+    selection-background-color: #3c6997;
+    selection-color: #e0fbfc;
+    border: 1px solid #00f5d4;
+}
+
+/* Labels for clean text display */
+QLabel {
+    color: #e0fbfc;
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+}
+
+/* PlotWidget for stats */
+PlotWidget {
+    background: #1a1a2e;
+    border: 1px solid #00f5d4;
+}
+
+/* Scroll bars */
+QScrollBar:vertical {
+    background: #1a1a2e;
+    width: 10px;
+    margin: 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #00f5d4;
+    border-radius: 5px;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    background: none;
+}
+
+/* QMessageBox styling */
+QMessageBox {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #1a1a2e, stop:1 #162447);
+}
+
+QMessageBox QLabel {
+    color: #e0fbfc;
+}
+
+QMessageBox QPushButton {
+    background-color: #0a3d62;
+    color: #e0fbfc;
+    border: 2px solid #00f5d4;
+    border-radius: 8px;
+    padding: 5px;
+}
+
+QMessageBox QPushButton:hover {
+    background-color: #3c6997;
+    border: 2px solid #00ffdd;
+    box-shadow: 0 0 10px #00ffdd;
+}
