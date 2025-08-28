@@ -6,4 +6,6 @@ bcrypt
 apscheduler
 python-dotenv
 sendgrid
+fastapi
+uvicorn
 gunicorn
