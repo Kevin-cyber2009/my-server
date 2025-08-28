@@ -1,125 +1,94 @@
-import os
-import sqlite3
-import bcrypt
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify, request
 from flask_httpauth import HTTPBasicAuth
+from datetime import datetime
+import sqlite3, bcrypt, os
 
 app = Flask(__name__)
 auth = HTTPBasicAuth()
 
-DATABASE = "school.db"
-
-
 def get_db_connection():
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect('school.db')
     conn.row_factory = sqlite3.Row
     return conn
 
-
-# ----------------- KHỞI TẠO DATABASE -----------------
-def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # Bảng users
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            school_name TEXT NOT NULL
-        )
-    """)
-
-    # Bảng học sinh
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS students (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            class_name TEXT NOT NULL,
-            date_of_birth TEXT,
-            gender TEXT,
-            school_name TEXT NOT NULL
-        )
-    """)
-
-    # Bảng loại vi phạm
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS violation_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            violation_name TEXT NOT NULL,
-            points_deducted INTEGER NOT NULL,
-            school_name TEXT NOT NULL
-        )
-    """)
-
-    # Bảng ghi nhận vi phạm
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS violations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id INTEGER NOT NULL,
-            violation_type TEXT NOT NULL,
-            points_deducted INTEGER NOT NULL,
-            violation_date TEXT NOT NULL,
-            school_name TEXT NOT NULL,
-            recorder_name TEXT NOT NULL,
-            recorder_class TEXT NOT NULL,
-            FOREIGN KEY (student_id) REFERENCES students (id)
-        )
-    """)
-
-    conn.commit()
-    conn.close()
-
-
-# ----------------- AUTH -----------------
 @auth.verify_password
 def verify_password(username, password):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT password FROM users WHERE username=?", (username,))
+    cursor.execute("SELECT password FROM users WHERE username = ?", (username,))
     result = cursor.fetchone()
     conn.close()
-    if result:
-        stored_pw = result[0]
-        if isinstance(stored_pw, str):  # nếu DB lưu text
-            stored_pw = stored_pw.encode("utf-8")
-        if bcrypt.checkpw(password.encode("utf-8"), stored_pw):
-            return username
+    if result and bcrypt.checkpw(password.encode('utf-8'), result[0].encode('utf-8')):
+        return username
     return None
 
+@app.route('/api/schools', methods=['GET'])
+def get_schools():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT school_name FROM users")
+    schools = [row['school_name'] for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(schools)
 
-# ----------------- API -----------------
-@app.route("/")
-def index():
-    return jsonify({"message": "✅ Server đang chạy thành công!"})
+@app.route('/api/violation_types/<school_name>', methods=['GET'])
+@auth.login_required
+def get_violation_types(school_name):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT violation_name, points_deducted FROM violation_types WHERE school_name = ?", (school_name,))
+    violation_types = [{"name": row['violation_name'], "points": row['points_deducted']} for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(violation_types)
 
+@app.route('/api/sync/db', methods=['GET'])
+def sync_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-@app.route("/register", methods=["POST"])
-def register():
-    data = request.json
-    username = data.get("username")
-    password = data.get("password")
-    school_name = data.get("school_name")
+    cursor.execute("SELECT * FROM students")
+    students = [dict(row) for row in cursor.fetchall()]
 
-    hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+    cursor.execute("SELECT * FROM violations")
+    violations = [dict(row) for row in cursor.fetchall()]
 
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO users (username, password, school_name) VALUES (?, ?, ?)",
-            (username, hashed_pw.decode("utf-8"), school_name),
-        )
-        conn.commit()
-        conn.close()
-        return jsonify({"message": "Đăng ký thành công"})
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "Tên đăng nhập đã tồn tại"}), 400
+    conn.close()
 
+    return jsonify({
+        "students": students,
+        "violations": violations,
+        "last_updated": datetime.now().isoformat()
+    })
 
-# ----------------- START APP -----------------
+@app.route('/api/sync/db', methods=['POST'])
+@auth.login_required
+def update_db():
+    data = request.get_json()
+    if not data or 'violations' not in data:
+        return jsonify({"error": "No violations data"}), 400
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    for violation in data['violations']:
+        cursor.execute("""
+            INSERT INTO violations (student_id, violation_type, points_deducted, violation_date, school_name, recorder_name, recorder_class)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            violation['student_id'],
+            violation['violation_type'],
+            violation['points_deducted'],
+            violation['violation_date'],
+            violation['school_name'],
+            violation['recorder_name'],
+            violation['recorder_class']
+        ))
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"message": "Data updated successfully"})
+
 if __name__ == "__main__":
-    init_db()  # ✅ tạo DB khi khởi động
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

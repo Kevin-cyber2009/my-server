@@ -115,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Khởi tạo Retrofit
         retrofit = new Retrofit.Builder()
-                .baseUrl("https://your-render.onrender.com/") // Thay bằng URL Render thực tế
+                .baseUrl("https://my-server-fvfu.onrender.com/")
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
         apiService = retrofit.create(ApiService.class);
