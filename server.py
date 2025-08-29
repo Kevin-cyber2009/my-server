@@ -186,13 +186,13 @@ def upload_violation_types():
     file = request.files['file']
     if file.filename.endswith(('.csv', '.xlsx')):
         df = pd.read_csv(file) if file.filename.endswith('.csv') else pd.read_excel(file)
-        required_cols = ['Tên vi phạm', 'Điểm trừ']
+        required_cols = ['Loại vi phạm', 'Điểm trừ']
         if not all(col in df.columns for col in required_cols):
             return jsonify({'error': 'Invalid file format'}), 400
 
         ViolationType.query.filter_by(school_id=school_id).delete()
         for _, row in df.iterrows():
-            rule = ViolationType(school_id=school_id, name=row['Tên vi phạm'], points_deducted=row['Điểm trừ'])
+            rule = ViolationType(school_id=school_id, name=row['Loại vi phạm'], points_deducted=row['Điểm trừ'])
             db.session.add(rule)
         db.session.commit()
         return jsonify({'message': 'Violation types uploaded'}), 200
