@@ -214,14 +214,31 @@ def record_violation():
     if not all([student_id, violation_type, points_deducted, recorder_name, recorder_class]):
         return jsonify({'error': 'Missing fields'}), 400
 
-    violation = Violation(
-        school_id=school_id, student_id=student_id, violation_type=violation_type,
-        points_deducted=points_deducted, violation_date=datetime.fromisoformat(violation_date),
-        recorder_name=recorder_name, recorder_class=recorder_class
-    )
-    db.session.add(violation)
-    db.session.commit()
-    return jsonify({'message': 'Violation recorded'}), 201
+    # Kiểm tra student tồn tại
+    student = Student.query.get(student_id)
+    if not student:
+        return jsonify({'error': 'Student not found'}), 404
+
+    # Kiểm tra violation_type tồn tại
+    violation = ViolationType.query.filter_by(school_id=school_id, name=violation_type).first()
+    if not violation:
+        return jsonify({'error': 'Violation type not found'}), 404
+
+    try:
+        violation_date_obj = datetime.fromisoformat(violation_date)
+        violation = Violation(
+            school_id=school_id, student_id=student_id, violation_type=violation_type,
+            points_deducted=points_deducted, violation_date=violation_date_obj,
+            recorder_name=recorder_name, recorder_class=recorder_class
+        )
+        db.session.add(violation)
+        db.session.commit()
+        return jsonify({'message': 'Violation recorded'}), 201
+    except ValueError as e:
+        return jsonify({'error': 'Invalid date format'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 # Xuất báo cáo Excel
 @app.route('/api/get_report/<school_id>', methods=['GET'])
@@ -231,17 +248,35 @@ def get_report(school_id):
         return jsonify({'error': 'Unauthorized'}), 401
 
     violations = Violation.query.filter_by(school_id=school_id).all()
-    data = [{
-        'Học sinh': v.student.name,
-        'Lớp': v.student.class_name,
-        'Ngày sinh': v.student.birthdate,
-        'Giới tính': v.student.gender,
-        'Vi phạm': v.violation_type,
-        'Điểm trừ': v.points_deducted,
-        'Ngày vi phạm': v.violation_date.strftime('%Y-%m-%d %H:%M'),
-        'Người ghi': v.recorder_name,
-        'Lớp người ghi': v.recorder_class
-    } for v in violations]
+    if not violations:
+        return jsonify({'message': 'No violations found'}), 200
+
+    data = []
+    for v in violations:
+        if v.student:  # Kiểm tra student tồn tại
+            data.append({
+                'Học sinh': v.student.name or 'N/A',
+                'Lớp': v.student.class_name or 'N/A',
+                'Ngày sinh': v.student.birthdate or 'N/A',
+                'Giới tính': v.student.gender or 'N/A',
+                'Vi phạm': v.violation_type,
+                'Điểm trừ': v.points_deducted,
+                'Ngày vi phạm': v.violation_date.strftime('%Y-%m-%d %H:%M'),
+                'Người ghi': v.recorder_name,
+                'Lớp người ghi': v.recorder_class
+            })
+        else:
+            data.append({
+                'Học sinh': 'N/A',
+                'Lớp': 'N/A',
+                'Ngày sinh': 'N/A',
+                'Giới tính': 'N/A',
+                'Vi phạm': v.violation_type,
+                'Điểm trừ': v.points_deducted,
+                'Ngày vi phạm': v.violation_date.strftime('%Y-%m-%d %H:%M'),
+                'Người ghi': v.recorder_name,
+                'Lớp người ghi': v.recorder_class
+            })
     df = pd.DataFrame(data)
     excel_buffer = io.BytesIO()
     df.to_excel(excel_buffer, index=False)
