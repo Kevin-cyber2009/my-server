@@ -185,7 +185,7 @@ def upload_violation_types():
 
     file = request.files['file']
     if file.filename.endswith(('.csv', '.xlsx')):
-        df = pd.read_csv(file) if file.filename.endswith('.csv') else pd.read_excel(file)
+        df = pd.read_csv(file, encoding='utf-8') if file.filename.endswith('.csv') else pd.read_excel(file)
         required_cols = ['Loại vi phạm', 'Điểm trừ']
         if not all(col in df.columns for col in required_cols):
             return jsonify({'error': 'Invalid file format'}), 400
