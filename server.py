@@ -13,6 +13,11 @@ from apscheduler.triggers.cron import CronTrigger
 import os
 import io
 import bcrypt
+import logging
+
+# Cấu hình logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 @app.route('/')
@@ -20,9 +25,9 @@ def index():
     return jsonify({'message': 'School Server API is running. Use /api/... for endpoints.'}), 200
 
 # Cấu hình
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///school.db')  # PostgreSQL trên Render
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///school.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET', 'your-secret-key')  # Đặt trên Render
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET', 'your-secret-key')
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
@@ -34,17 +39,17 @@ scheduler.start()
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(100), nullable=False)  # Lưu bcrypt hash
+    password = db.Column(db.String(100), nullable=False)
     school_id = db.Column(db.String(50), db.ForeignKey('school.id'), nullable=False)
 
 class School(db.Model):
-    id = db.Column(db.String(50), primary_key=True)  # ID trường
+    id = db.Column(db.String(50), primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), nullable=False)
-    send_hour = db.Column(db.Integer, nullable=False)  # Giờ gửi mail (0-23)
+    send_hour = db.Column(db.Integer, nullable=False)
 
 class Student(db.Model):
-    id = db.Column(db.String(50), primary_key=True)  # ID từ QR
+    id = db.Column(db.String(50), primary_key=True)
     school_id = db.Column(db.String(50), db.ForeignKey('school.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     class_name = db.Column(db.String(50), nullable=False)
@@ -67,7 +72,6 @@ class Violation(db.Model):
     recorder_name = db.Column(db.String(100), nullable=False)
     recorder_class = db.Column(db.String(50), nullable=False)
 
-# Tạo DB
 with app.app_context():
     db.create_all()
 
@@ -75,10 +79,12 @@ with app.app_context():
 def send_report_email(school_id):
     school = School.query.get(school_id)
     if not school:
+        logger.error(f"School {school_id} not found for email")
         return
 
     violations = Violation.query.filter_by(school_id=school_id).all()
     if not violations:
+        logger.info(f"No violations found for school {school_id}")
         return
 
     data = [{
@@ -98,7 +104,7 @@ def send_report_email(school_id):
     excel_buffer.seek(0)
 
     msg = MIMEMultipart()
-    msg['From'] = 'your-email@gmail.com'  # Thay bằng email của bạn
+    msg['From'] = 'trananhkhoidq@gmail.com'
     msg['To'] = school.email
     msg['Subject'] = f'Báo cáo vi phạm - {school.name}'
     msg.attach(MIMEText('Đính kèm báo cáo vi phạm.', 'plain'))
@@ -109,11 +115,15 @@ def send_report_email(school_id):
     attachment.add_header('Content-Disposition', 'attachment; filename=report.xlsx')
     msg.attach(attachment)
 
-    server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.starttls()
-    server.login('your-email@gmail.com', os.getenv('MAIL_PASSWORD'))  # App password
-    server.sendmail(msg['From'], msg['To'], msg.as_string())
-    server.quit()
+    try:
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login('trananhkhoidq@gmail.com', os.getenv('MAIL_PASSWORD'))
+        server.sendmail(msg['From'], msg['To'], msg.as_string())
+        server.quit()
+        logger.info(f"Email sent successfully to {school.email}")
+    except Exception as e:
+        logger.error(f"Failed to send email to {school.email}: {str(e)}")
 
 # Đăng ký trường
 @app.route('/api/register_school', methods=['POST'])
@@ -137,12 +147,7 @@ def register_school():
         db.session.add(school)
         db.session.add(user)
         db.session.commit()
-
-        scheduler.add_job(
-            send_report_email,
-            CronTrigger(hour=send_hour, minute=0),
-            args=[school_id]
-        )
+        scheduler.add_job(send_report_email, CronTrigger(hour=send_hour, minute=0), args=[school_id])
         return jsonify({'message': 'School registered', 'school_id': school_id}), 201
     except Exception as e:
         db.session.rollback()
@@ -167,12 +172,13 @@ def get_schools():
     return jsonify([{'id': s.id, 'name': s.name} for s in schools]), 200
 
 # Lấy quy định vi phạm
-@app.route('/api/violation_types/<school_id>', methods=['GET'])
+@app.route('/api/violation_types/<school_name>', methods=['GET'])
 @jwt_required()
-def get_violation_types(school_id):
-    if get_jwt_identity() != school_id:
+def get_violation_types(school_name):
+    school = School.query.filter_by(name=school_name).first()
+    if not school or get_jwt_identity() != school.id:
         return jsonify({'error': 'Unauthorized'}), 401
-    violation_types = ViolationType.query.filter_by(school_id=school_id).all()
+    violation_types = ViolationType.query.filter_by(school_id=school.id).all()
     return jsonify([{'name': v.name, 'points': v.points_deducted} for v in violation_types]), 200
 
 # Upload quy định vi phạm
@@ -198,6 +204,41 @@ def upload_violation_types():
         return jsonify({'message': 'Violation types uploaded'}), 200
     return jsonify({'error': 'Unsupported file format'}), 400
 
+# Thêm học sinh
+@app.route('/api/add_student', methods=['POST'])
+@jwt_required()
+def add_student():
+    school_id = get_jwt_identity()
+    data = request.json
+    name = data.get('name')
+    class_name = data.get('class')
+    birthdate = data.get('dob')
+    gender = data.get('gender')
+
+    if not all([name, class_name, birthdate, gender]):
+        return jsonify({'error': 'Missing fields'}), 400
+
+    student_id = f"{school_id}_{hash(name) % 1000000}".replace('-', '0')
+    existing_student = Student.query.get(student_id)
+    if existing_student:
+        return jsonify({'error': 'Student ID already exists'}), 409
+
+    new_student = Student(
+        id=student_id,
+        school_id=school_id,
+        name=name,
+        class_name=class_name,
+        birthdate=birthdate,
+        gender=gender
+    )
+    try:
+        db.session.add(new_student)
+        db.session.commit()
+        return jsonify({'message': 'Student added successfully', 'student_id': student_id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 # Ghi vi phạm
 @app.route('/api/record_violation', methods=['POST'])
 @jwt_required()
@@ -214,24 +255,26 @@ def record_violation():
     if not all([student_id, violation_type, points_deducted, recorder_name, recorder_class]):
         return jsonify({'error': 'Missing fields'}), 400
 
-    # Kiểm tra student tồn tại
     student = Student.query.get(student_id)
     if not student:
         return jsonify({'error': 'Student not found'}), 404
 
-    # Kiểm tra violation_type tồn tại
     violation = ViolationType.query.filter_by(school_id=school_id, name=violation_type).first()
     if not violation:
         return jsonify({'error': 'Violation type not found'}), 404
 
     try:
         violation_date_obj = datetime.fromisoformat(violation_date)
-        violation = Violation(
-            school_id=school_id, student_id=student_id, violation_type=violation_type,
-            points_deducted=points_deducted, violation_date=violation_date_obj,
-            recorder_name=recorder_name, recorder_class=recorder_class
+        new_violation = Violation(
+            school_id=school_id,
+            student_id=student_id,
+            violation_type=violation_type,
+            points_deducted=points_deducted,
+            violation_date=violation_date_obj,
+            recorder_name=recorder_name,
+            recorder_class=recorder_class
         )
-        db.session.add(violation)
+        db.session.add(new_violation)
         db.session.commit()
         return jsonify({'message': 'Violation recorded'}), 201
     except ValueError as e:
@@ -253,7 +296,7 @@ def get_report(school_id):
 
     data = []
     for v in violations:
-        if v.student:  # Kiểm tra student tồn tại
+        if v.student:
             data.append({
                 'Học sinh': v.student.name or 'N/A',
                 'Lớp': v.student.class_name or 'N/A',
@@ -283,9 +326,40 @@ def get_report(school_id):
     excel_buffer.seek(0)
     return send_file(excel_buffer, as_attachment=True, download_name='report.xlsx', mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+# Endpoint sync từ app Android
+@app.route('/api/sync/db', methods=['POST'])
+@jwt_required()
+def update_db():
+    school_id = get_jwt_identity()
+    data = request.json
+    if not data or 'violations' not in data:
+        return jsonify({"error": "No violations data"}), 400
+
+    try:
+        for violation in data['violations']:
+            student_id = violation.get('student_id')
+            student = Student.query.get(student_id)
+            if not student:
+                return jsonify({'error': f'Student {student_id} not found'}), 404
+
+            violation_date = datetime.strptime(violation['violation_date'], '%Y-%m-%d')
+            new_violation = Violation(
+                school_id=school_id,
+                student_id=student_id,
+                violation_type=violation['violation_type'],
+                points_deducted=violation['points_deducted'],
+                violation_date=violation_date,
+                recorder_name=violation['recorder_name'],
+                recorder_class=violation['recorder_class']
+            )
+            db.session.add(new_violation)
+        db.session.commit()
+        return jsonify({"message": "Data updated successfully"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-    print(f"DEBUG: DATABASE_URL={os.getenv('DATABASE_URL')}")
-    print(f"DEBUG: JWT_SECRET={os.getenv('JWT_SECRET')}")
-    print(f"DEBUG: MAIL_PASSWORD={os.getenv('MAIL_PASSWORD')}")
+    logger.info("Server started successfully with configured environment variables")
