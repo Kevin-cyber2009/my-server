@@ -182,6 +182,7 @@ def get_violation_types(school_name):
     return jsonify([{'name': v.name, 'points': v.points_deducted} for v in violation_types]), 200
 
 # Upload quy định vi phạm
+# Endpoint upload_violation_types
 @app.route('/api/upload_violation_types', methods=['POST'])
 @jwt_required()
 def upload_violation_types():
@@ -191,18 +192,24 @@ def upload_violation_types():
 
     file = request.files['file']
     if file.filename.endswith(('.csv', '.xlsx')):
-        df = pd.read_csv(file, encoding='utf-8') if file.filename.endswith('.csv') else pd.read_excel(file)
-        required_cols = ['Loại vi phạm', 'Điểm trừ']
-        if not all(col in df.columns for col in required_cols):
-            return jsonify({'error': 'Invalid file format'}), 400
+        try:
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(file, encoding='utf-8')
+            else:
+                df = pd.read_excel(file)
+            required_cols = ['Loại vi phạm', 'Điểm trừ']
+            if not all(col in df.columns for col in required_cols):
+                return jsonify({'error': 'Invalid file format: Missing columns "Loại vi phạm" or "Điểm trừ"'}), 422  
 
-        ViolationType.query.filter_by(school_id=school_id).delete()
-        for _, row in df.iterrows():
-            rule = ViolationType(school_id=school_id, name=row['Loại vi phạm'], points_deducted=row['Điểm trừ'])
-            db.session.add(rule)
-        db.session.commit()
-        return jsonify({'message': 'Violation types uploaded'}), 200
-    return jsonify({'error': 'Unsupported file format'}), 400
+            ViolationType.query.filter_by(school_id=school_id).delete()
+            for _, row in df.iterrows():
+                rule = ViolationType(school_id=school_id, name=row['Loại vi phạm'], points_deducted=row['Điểm trừ'])
+                db.session.add(rule)
+            db.session.commit()
+            return jsonify({'message': 'Violation types uploaded'}), 200
+        except Exception as e:
+            return jsonify({'error': f'Error processing file: {str(e)}'}), 422  
+    return jsonify({'error': 'Unsupported file format (must be .csv or .xlsx)'}), 400
 
 # Thêm học sinh
 @app.route('/api/add_student', methods=['POST'])
