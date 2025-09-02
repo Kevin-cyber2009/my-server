@@ -197,7 +197,7 @@ def upload_violation_types():
                 df = pd.read_csv(file, encoding='utf-8')
             else:
                 df = pd.read_excel(file)
-            required_cols = ['Loại vi phạm', 'Điểm trừ']
+            required_cols = ['Loai vi pham', 'Diem tru']  # Thay bằng không dấu để test
             if not all(col in df.columns for col in required_cols):
                 return jsonify({'error': f'Invalid file format: Missing columns {required_cols}'}), 422
             if df.empty or not all(df[col].notna().any() for col in required_cols):
@@ -205,18 +205,17 @@ def upload_violation_types():
 
             ViolationType.query.filter_by(school_id=school_id).delete()
             for _, row in df.iterrows():
-                rule = ViolationType(school_id=school_id, name=str(row['Loại vi phạm']).strip(), points_deducted=int(row['Điểm trừ']))
+                rule = ViolationType(school_id=school_id, name=str(row['Loai vi pham']).strip(), points_deducted=int(row['Diem tru']))
                 db.session.add(rule)
             db.session.commit()
             return jsonify({'message': 'Violation types uploaded'}), 200
         except pd.errors.ParserError as e:
             return jsonify({'error': f'Parsing error: {str(e)} (Check CSV encoding or format)'}), 422
         except ValueError as e:
-            return jsonify({'error': f'Value error: {str(e)} (Ensure "Điểm trừ" is numeric)'}), 422
+            return jsonify({'error': f'Value error: {str(e)} (Ensure "Diem tru" is numeric)'}), 422
         except Exception as e:
             return jsonify({'error': f'Unexpected error: {str(e)}'}), 422
     return jsonify({'error': 'Unsupported file format (must be .csv or .xlsx)'}), 400
-
 # Thêm học sinh
 @app.route('/api/add_student', methods=['POST'])
 @jwt_required()
