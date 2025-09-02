@@ -197,11 +197,14 @@ def upload_violation_types():
                 df = pd.read_csv(file, encoding='utf-8')
             else:
                 df = pd.read_excel(file)
-            required_cols = ['Loai vi pham', 'Diem tru']  # Thay bằng không dấu để test
+            required_cols = ['Loai vi pham', 'Diem tru']
             if not all(col in df.columns for col in required_cols):
                 return jsonify({'error': f'Invalid file format: Missing columns {required_cols}'}), 422
             if df.empty or not all(df[col].notna().any() for col in required_cols):
                 return jsonify({'error': 'File is empty or missing data in required columns'}), 422
+            # Kiểm tra kiểu dữ liệu
+            if not pd.api.types.is_numeric_dtype(df['Diem tru']):
+                return jsonify({'error': 'Column "Diem tru" must contain numeric values'}), 422
 
             ViolationType.query.filter_by(school_id=school_id).delete()
             for _, row in df.iterrows():
@@ -216,6 +219,7 @@ def upload_violation_types():
         except Exception as e:
             return jsonify({'error': f'Unexpected error: {str(e)}'}), 422
     return jsonify({'error': 'Unsupported file format (must be .csv or .xlsx)'}), 400
+
 # Thêm học sinh
 @app.route('/api/add_student', methods=['POST'])
 @jwt_required()
