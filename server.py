@@ -187,37 +187,60 @@ def get_violation_types(school_name):
 @jwt_required()
 def upload_violation_types():
     school_id = get_jwt_identity()
+    logger.debug(f"Upload request from school_id: {school_id}")
     if 'file' not in request.files:
+        logger.error("No file in request")
         return jsonify({'error': 'No file uploaded'}), 400
 
     file = request.files['file']
-    if file.filename.endswith(('.csv', '.xlsx')):
+    filename = file.filename
+    if not filename:
+        logger.error("File has no filename")
+        return jsonify({'error': 'File must have a filename'}), 400
+    logger.debug(f"Uploaded file: {filename}")
+    if filename.endswith(('.csv', '.xlsx')):
         try:
-            if file.filename.endswith('.csv'):
-                df = pd.read_csv(file, encoding='utf-8')
+            file.seek(0)  # Reset file pointer để đọc từ đầu
+            if filename.endswith('.csv'):
+                df = pd.read_csv(file, encoding='utf-8-sig')  # Handle BOM nếu có
             else:
                 df = pd.read_excel(file)
+            df.columns = df.columns.str.strip()  # Remove space thừa ở header columns
+            logger.debug(f"DataFrame columns after strip: {df.columns.tolist()}")
+            logger.debug(f"DataFrame head: {df.head().to_dict()}")
+
             required_cols = ['Loai vi pham', 'Diem tru']
             if not all(col in df.columns for col in required_cols):
-                return jsonify({'error': f'Invalid file format: Missing columns {required_cols}'}), 422
+                missing = [col for col in required_cols if col not in df.columns]
+                logger.error(f"Missing columns: {missing}")
+                return jsonify({'error': f'Invalid file format: Missing columns {missing}'}), 422
             if df.empty or not all(df[col].notna().any() for col in required_cols):
+                logger.error("File empty or missing data")
                 return jsonify({'error': 'File is empty or missing data in required columns'}), 422
-            # Kiểm tra kiểu dữ liệu
             if not pd.api.types.is_numeric_dtype(df['Diem tru']):
+                logger.error("'Diem tru' not numeric")
                 return jsonify({'error': 'Column "Diem tru" must contain numeric values'}), 422
 
             ViolationType.query.filter_by(school_id=school_id).delete()
             for _, row in df.iterrows():
-                rule = ViolationType(school_id=school_id, name=str(row['Loai vi pham']).strip(), points_deducted=int(row['Diem tru']))
+                name = str(row['Loai vi pham']).strip()
+                points = int(row['Diem tru'])
+                logger.debug(f"Adding rule: {name} with points {points}")
+                rule = ViolationType(school_id=school_id, name=name, points_deducted=points)
                 db.session.add(rule)
             db.session.commit()
+            logger.info(f"Violation types uploaded for school_id: {school_id}")
             return jsonify({'message': 'Violation types uploaded'}), 200
         except pd.errors.ParserError as e:
-            return jsonify({'error': f'Parsing error: {str(e)} (Check CSV encoding or format)'}), 422
+            logger.error(f"Parsing error: {str(e)}")
+            return jsonify({'error': f'Parsing error: {str(e)} (Check CSV encoding, line endings, or format)'}), 422
         except ValueError as e:
+            logger.error(f"Value error: {str(e)}")
             return jsonify({'error': f'Value error: {str(e)} (Ensure "Diem tru" is numeric)'}), 422
         except Exception as e:
-            return jsonify({'error': f'Unexpected error: {str(e)}'}), 422
+            logger.error(f"Unexpected error: {str(e)}")
+            return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+    logger.error(f"Unsupported file format: {filename}")
     return jsonify({'error': 'Unsupported file format (must be .csv or .xlsx)'}), 400
 
 # Thêm học sinh
