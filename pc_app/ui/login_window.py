@@ -1,9 +1,11 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QComboBox, QMessageBox
 from PySide6.QtCore import Qt
-import sqlite3
-import bcrypt
+import requests
+from requests.exceptions import RequestException
 import os
 from ui.main_window import MainWindow
+
+SERVER_URL = "https://my-server-fvfu.onrender.com"  # URL server Render
 
 class LoginWindow(QWidget):
     def __init__(self):
@@ -12,55 +14,6 @@ class LoginWindow(QWidget):
         self.resize(400, 500)
         self.setup_ui()
         self.is_login_mode = True
-        self.setup_database()
-
-    def setup_database(self):
-        """Khởi tạo cơ sở dữ liệu SQLite"""
-        if not os.path.exists("database"):
-            os.makedirs("database")
-        self.conn = sqlite3.connect("database/school.db")
-        self.cursor = self.conn.cursor()
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
-                password TEXT NOT NULL,
-                email TEXT NOT NULL,
-                report_hour INTEGER NOT NULL,
-                school_name TEXT NOT NULL
-            )
-        """)
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS students (
-                student_id TEXT PRIMARY KEY,
-                full_name TEXT NOT NULL,
-                class_name TEXT NOT NULL,
-                dob TEXT NOT NULL,
-                gender TEXT NOT NULL,
-                school_name TEXT NOT NULL
-            )
-        """)
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS violations (
-                violation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                student_id TEXT NOT NULL,
-                violation_type TEXT NOT NULL,
-                points_deducted INTEGER NOT NULL,
-                violation_date TEXT NOT NULL,
-                school_name TEXT NOT NULL,
-                recorder_name TEXT NOT NULL,
-                recorder_class TEXT NOT NULL,
-                FOREIGN KEY (student_id) REFERENCES students(student_id)
-            )
-        """)
-        self.cursor.execute("""
-            CREATE TABLE IF NOT EXISTS violation_types (
-                violation_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                violation_name TEXT NOT NULL,
-                points_deducted INTEGER NOT NULL,
-                school_name TEXT NOT NULL
-            )
-        """)
-        self.conn.commit()
 
     def setup_ui(self):
         """Thiết lập giao diện high-tech"""
@@ -138,16 +91,15 @@ class LoginWindow(QWidget):
             return
 
         if self.is_login_mode:
-            # Kiểm tra đăng nhập
-            self.cursor.execute("SELECT password FROM users WHERE username = ?", (username,))
-            result = self.cursor.fetchone()
-            if result and bcrypt.checkpw(password.encode('utf-8'), result[0].encode('utf-8')):
+            # Đăng nhập qua server
+            response = self.login(username, password)
+            if 'token' in response:
                 QMessageBox.information(self, "Thành công", "Đăng nhập thành công!")
                 self.open_main_window(username)
             else:
-                QMessageBox.critical(self, "Lỗi", "Tên đăng nhập hoặc mật khẩu không đúng!")
+                QMessageBox.critical(self, "Lỗi", response.get('error', "Đăng nhập thất bại!"))
         else:
-            # Đăng ký tài khoản mới
+            # Đăng ký qua server
             email = self.email_input.text().strip()
             school = self.school_input.text().strip()
             report_hour = self.hour_combo.currentText().split(":")[0]
@@ -156,27 +108,39 @@ class LoginWindow(QWidget):
                 QMessageBox.warning(self, "Lỗi", "Vui lòng nhập đầy đủ thông tin!")
                 return
 
-            # Mã hóa mật khẩu
-            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-
-            try:
-                self.cursor.execute("""
-                    INSERT INTO users (username, password, email, report_hour, school_name)
-                    VALUES (?, ?, ?, ?, ?)
-                """, (username, hashed_password, email, report_hour, school))
-                self.conn.commit()
+            school_data = {
+                "school_id": school.lower().replace(" ", ""),
+                "name": school,
+                "email": email,
+                "send_hour": int(report_hour),
+                "username": username,
+                "password": password
+            }
+            response = self.register_school(school_data)
+            if 'message' in response:
                 QMessageBox.information(self, "Thành công", "Đăng ký thành công! Vui lòng đăng nhập.")
                 self.toggle_mode()
-            except sqlite3.IntegrityError:
-                QMessageBox.critical(self, "Lỗi", "Tên đăng nhập đã tồn tại!")
+            else:
+                QMessageBox.critical(self, "Lỗi", response.get('error', "Đăng ký thất bại!"))
+
+    def register_school(self, school_data):
+        try:
+            response = requests.post(f"{SERVER_URL}/api/register_school", json=school_data)
+            response.raise_for_status()
+            return response.json()
+        except RequestException as e:
+            return {"error": str(e)}
+
+    def login(self, username, password):
+        try:
+            response = requests.post(f"{SERVER_URL}/api/login", json={"username": username, "password": password})
+            response.raise_for_status()
+            return response.json()
+        except RequestException as e:
+            return {"error": str(e)}
 
     def open_main_window(self, username):
         """Mở cửa sổ chính sau khi đăng nhập"""
         self.main_window = MainWindow(username)
         self.main_window.show()
         self.close()
-
-    def closeEvent(self, event):
-        """Đóng kết nối cơ sở dữ liệu khi thoát"""
-        self.conn.close()
-        event.accept()

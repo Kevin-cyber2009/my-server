@@ -46,7 +46,7 @@ import retrofit2.http.Path;
 // Retrofit API
 interface ApiService {
     @GET("/api/schools")
-    Call<List<String>> getSchools();
+    Call<List<School>> getSchools();
 
     @GET("/api/violation_types/{school_name}")
     Call<List<ViolationType>> getViolationTypes(@Path("school_name") String schoolName);
@@ -212,16 +212,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadSchools() {
-        apiService.getSchools().enqueue(new Callback<List<String>>() {
+        apiService.getSchools().enqueue(new Callback<List<School>>() {
             @Override
-            public void onResponse(Call<List<String>> call, Response<List<String>> response) {
+            public void onResponse(Call<List<School>> call, Response<List<School>> response) {
                 if (response.isSuccessful() && response.body() != null && !response.body().isEmpty()) {
-                    List<String> schools = response.body();
-                    ArrayAdapter<String> adapter = new ArrayAdapter<>(MainActivity.this,
-                            android.R.layout.simple_spinner_dropdown_item, schools);
+                    List<School> schools = response.body();
+
+                    // Lấy danh sách tên để show ra spinner
+                    List<String> schoolNames = new ArrayList<>();
+                    for (School s : schools) {
+                        schoolNames.add(s.getName());
+                    }
+
+                    ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                            MainActivity.this,
+                            android.R.layout.simple_spinner_dropdown_item,
+                            schoolNames
+                    );
                     schoolSpinner.setAdapter(adapter);
-                    if (!schools.isEmpty()) {
-                        loadViolationTypes(schools.get(0));
+
+                    if (!schoolNames.isEmpty()) {
+                        loadViolationTypes(schoolNames.get(0));
                     }
                 } else {
                     Toast.makeText(MainActivity.this, "Lỗi tải danh sách trường", Toast.LENGTH_SHORT).show();
@@ -229,12 +240,13 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onFailure(Call<List<String>> call, Throwable t) {
+            public void onFailure(Call<List<School>> call, Throwable t) {
                 Log.e(TAG, "Lỗi mạng loadSchools: " + t.getMessage());
                 Toast.makeText(MainActivity.this, "Lỗi mạng: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
+
 
     private void loadViolationTypes(String schoolName) {
         apiService.getViolationTypes(schoolName).enqueue(new Callback<List<ViolationType>>() {

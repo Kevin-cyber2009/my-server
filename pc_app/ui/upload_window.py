@@ -1,14 +1,13 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QMessageBox
 from PySide6.QtCore import Qt
-import sqlite3
-from utils.excel_handler import read_rules_excel
-
+import requests
+from requests.exceptions import RequestException
+import os
 class UploadWindow(QWidget):
-    def __init__(self, username, conn):
+    def __init__(self, username, token):
         super().__init__()
         self.username = username
-        self.conn = conn
-        self.cursor = conn.cursor()
+        self.token = token  # Nhận token từ MainWindow
         self.setWindowTitle("Upload Nội Quy Vi Phạm")
         self.resize(400, 300)
         self.setup_ui()
@@ -41,27 +40,43 @@ class UploadWindow(QWidget):
     def select_excel_file(self):
         """Mở hộp thoại chọn file Excel"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Chọn File Excel", "", "Excel Files (*.xlsx *.xls)"
+            self, "Chọn File Excel", "", "Excel Files (*.csv *.xlsx *.xls)"
         )
         if file_path:
+            if not file_path.lower().endswith(('.csv', '.xlsx', '.xls')):
+                QMessageBox.warning(self, "Lỗi", "Vui lòng chọn file .csv hoặc .xlsx!")
+                return
             self.excel_file = file_path
             self.upload_button.setEnabled(True)
             QMessageBox.information(self, "Thành công", f"Đã chọn file: {file_path}")
 
     def upload_rules(self):
-        """Đọc file Excel và lưu nội quy vào SQLite"""
         try:
-            # Lấy tên trường
-            self.cursor.execute("SELECT school_name FROM users WHERE username = ?", (self.username,))
-            school_name = self.cursor.fetchone()[0]
-
-            # Đọc và lưu nội quy
-            success, error = read_rules_excel(self.excel_file, school_name)
-            if success:
-                QMessageBox.information(self, "Thành công", "Đã upload nội quy thành công!")
-            else:
-                QMessageBox.critical(self, "Lỗi", error)
-
+            filename = os.path.basename(self.excel_file)  # Lấy tên file để server check endswith
+            with open(self.excel_file, 'rb') as file:
+                files = {'file': (filename, file, 'application/octet-stream')}  # Thêm tuple: (filename, content, mimetype)
+                headers = {"Authorization": f"Bearer {self.token}"}
+                response = requests.post(
+                    "https://my-server-fvfu.onrender.com/api/upload_violation_types",
+                    files=files,
+                    headers=headers,
+                    timeout=30  # Thêm timeout để tránh lag Render
+                )
+                response.raise_for_status()
+                result = response.json()
+                if 'message' in result:
+                    QMessageBox.information(self, "Thành công", result['message'])
+                else:
+                    QMessageBox.warning(self, "Cảnh báo", "Upload thành công nhưng có thông báo: " + str(result))
+        except RequestException as e:
+            error_msg = f"Lỗi upload: {str(e)} (Mã lỗi: {e.response.status_code if e.response else 'No response'})"
+            if e.response:
+                try:
+                    error_detail = e.response.json().get('error', 'No detail')
+                except:
+                    error_detail = e.response.text
+                error_msg += f"\nChi tiết từ server: {error_detail}"
+            QMessageBox.critical(self, "Lỗi", error_msg)
         except Exception as e:
             QMessageBox.critical(self, "Lỗi", f"Có lỗi xảy ra: {str(e)}")
 
