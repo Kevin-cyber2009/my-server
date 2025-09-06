@@ -56,14 +56,15 @@ class UploadWindow(QWidget):
             print(f"Selected file: {self.excel_file}, filename: {filename}")  # Debug file path
             with open(self.excel_file, 'rb') as file:
                 print(f"File size: {os.path.getsize(self.excel_file)} bytes")  # Debug file size
-                files = {'file': (filename, file, 'application/octet-stream')}
+                files = {'file': (filename, file, 'text/csv')}  # Thay mimetype thành 'text/csv'
                 headers = {"Authorization": f"Bearer {self.token}"}
                 response = requests.post(
-                    "http://127.0.0.1:10000/api/upload_violation_types",  # Sử dụng local URL để test
+                    "http://127.0.0.1:10000/api/upload_violation_types",  # Local URL
                     files=files,
                     headers=headers,
                     timeout=30
                 )
+                print(f"Response status: {response.status_code}, text: {response.text}")  # Debug full response
                 response.raise_for_status()
                 result = response.json()
                 if 'message' in result:

@@ -188,6 +188,8 @@ def get_violation_types(school_name):
 def upload_violation_types():
     school_id = get_jwt_identity()
     logger.debug(f"Upload request from school_id: {school_id}")
+    logger.debug(f"Request content_type: {request.content_type}")
+    logger.debug(f"Request files: {request.files}")
     if 'file' not in request.files:
         logger.error("No file in request")
         return jsonify({'error': 'No file uploaded'}), 400
@@ -202,10 +204,8 @@ def upload_violation_types():
         try:
             file.seek(0)
             if filename.endswith('.csv'):
-                # Đọc nội dung để debug
                 file_content = file.read().decode('utf-8-sig')
                 logger.debug(f"File content: {file_content}")
-                # Tự detect separator (comma, tab, space)
                 df = pd.read_csv(io.StringIO(file_content), encoding='utf-8-sig', sep=None, engine='python')
             else:
                 df = pd.read_excel(file)
