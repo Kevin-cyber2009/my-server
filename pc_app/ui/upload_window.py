@@ -53,11 +53,12 @@ class UploadWindow(QWidget):
     def upload_rules(self):
         try:
             filename = os.path.basename(self.excel_file)
-            print(f"Selected file: {self.excel_file}, filename: {filename}")  # Debug file path
+            print(f"Selected file: {self.excel_file}, filename: {filename}, token: {self.token}")  # Debug token
             with open(self.excel_file, 'rb') as file:
                 print(f"File size: {os.path.getsize(self.excel_file)} bytes")  # Debug file size
-                files = {'file': (filename, file, 'text/csv')}  # Thay mimetype thành 'text/csv'
+                files = {'file': (filename, file, 'text/csv')}  # Giữ mimetype text/csv
                 headers = {"Authorization": f"Bearer {self.token}"}
+                print(f"Sending headers: {headers}")  # Debug headers
                 response = requests.post(
                     "http://127.0.0.1:10000/api/upload_violation_types",  # Local URL
                     files=files,

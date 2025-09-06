@@ -16,7 +16,7 @@ import bcrypt
 import logging
 
 # Cấu hình logging
-logging.basicConfig(level=logging.DEBUG)  # Đổi thành DEBUG để thấy chi tiết
+logging.basicConfig(level=logging.DEBUG)  # Đảm bảo DEBUG
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -188,6 +188,7 @@ def get_violation_types(school_name):
 def upload_violation_types():
     school_id = get_jwt_identity()
     logger.debug(f"Upload request from school_id: {school_id}")
+    logger.debug(f"Request headers: {request.headers}")
     logger.debug(f"Request content_type: {request.content_type}")
     logger.debug(f"Request files: {request.files}")
     if 'file' not in request.files:
