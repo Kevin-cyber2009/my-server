@@ -16,7 +16,7 @@ import bcrypt
 import logging
 
 # Cấu hình logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)  # Đổi thành DEBUG để thấy chi tiết
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -197,16 +197,20 @@ def upload_violation_types():
     if not filename:
         logger.error("File has no filename")
         return jsonify({'error': 'File must have a filename'}), 400
-    logger.debug(f"Uploaded file: {filename}")
+    logger.debug(f"Uploaded file: {filename}, size: {file.content_length if hasattr(file, 'content_length') else 'Unknown'}")
     if filename.endswith(('.csv', '.xlsx')):
         try:
-            file.seek(0)  # Reset file pointer để đọc từ đầu
+            file.seek(0)
             if filename.endswith('.csv'):
-                df = pd.read_csv(file, encoding='utf-8-sig')  # Handle BOM nếu có
+                # Đọc nội dung để debug
+                file_content = file.read().decode('utf-8-sig')
+                logger.debug(f"File content: {file_content}")
+                # Tự detect separator (comma, tab, space)
+                df = pd.read_csv(io.StringIO(file_content), encoding='utf-8-sig', sep=None, engine='python')
             else:
                 df = pd.read_excel(file)
-            df.columns = df.columns.str.strip()  # Remove space thừa ở header columns
-            logger.debug(f"DataFrame columns after strip: {df.columns.tolist()}")
+            df.columns = df.columns.str.strip()
+            logger.debug(f"DataFrame columns: {df.columns.tolist()}")
             logger.debug(f"DataFrame head: {df.head().to_dict()}")
 
             required_cols = ['Loai vi pham', 'Diem tru']
@@ -218,7 +222,7 @@ def upload_violation_types():
                 logger.error("File empty or missing data")
                 return jsonify({'error': 'File is empty or missing data in required columns'}), 422
             if not pd.api.types.is_numeric_dtype(df['Diem tru']):
-                logger.error("'Diem tru' not numeric")
+                logger.error(f"'Diem tru' not numeric, dtype: {df['Diem tru'].dtype}")
                 return jsonify({'error': 'Column "Diem tru" must contain numeric values'}), 422
 
             ViolationType.query.filter_by(school_id=school_id).delete()
@@ -232,7 +236,7 @@ def upload_violation_types():
             logger.info(f"Violation types uploaded for school_id: {school_id}")
             return jsonify({'message': 'Violation types uploaded'}), 200
         except pd.errors.ParserError as e:
-            logger.error(f"Parsing error: {str(e)}")
+            logger.error(f"Parsing error: {str(e)}, content: {file_content if 'file_content' in locals() else 'N/A'}")
             return jsonify({'error': f'Parsing error: {str(e)} (Check CSV encoding, line endings, or format)'}), 422
         except ValueError as e:
             logger.error(f"Value error: {str(e)}")
@@ -400,5 +404,5 @@ def update_db():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)  # Thêm debug=True cho local log chi tiết
     logger.info("Server started successfully with configured environment variables")

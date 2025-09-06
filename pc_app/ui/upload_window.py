@@ -52,15 +52,17 @@ class UploadWindow(QWidget):
 
     def upload_rules(self):
         try:
-            filename = os.path.basename(self.excel_file)  # Lấy tên file để server check endswith
+            filename = os.path.basename(self.excel_file)
+            print(f"Selected file: {self.excel_file}, filename: {filename}")  # Debug file path
             with open(self.excel_file, 'rb') as file:
-                files = {'file': (filename, file, 'application/octet-stream')}  # Thêm tuple: (filename, content, mimetype)
+                print(f"File size: {os.path.getsize(self.excel_file)} bytes")  # Debug file size
+                files = {'file': (filename, file, 'application/octet-stream')}
                 headers = {"Authorization": f"Bearer {self.token}"}
                 response = requests.post(
-                    "https://my-server-fvfu.onrender.com/api/upload_violation_types",
+                    "http://127.0.0.1:10000/api/upload_violation_types",  # Sử dụng local URL để test
                     files=files,
                     headers=headers,
-                    timeout=30  # Thêm timeout để tránh lag Render
+                    timeout=30
                 )
                 response.raise_for_status()
                 result = response.json()
