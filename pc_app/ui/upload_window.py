@@ -53,19 +53,18 @@ class UploadWindow(QWidget):
     def upload_rules(self):
         try:
             filename = os.path.basename(self.excel_file)
-            print(f"Selected file: {self.excel_file}, filename: {filename}, token: {self.token}")  # Debug token
+            mimetype = 'text/csv' if filename.endswith('.csv') else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             with open(self.excel_file, 'rb') as file:
-                print(f"File size: {os.path.getsize(self.excel_file)} bytes")  # Debug file size
-                files = {'file': (filename, file, 'text/csv')}  # Giữ mimetype text/csv
+                files = {'file': (filename, file, mimetype)}
                 headers = {"Authorization": f"Bearer {self.token}"}
-                print(f"Sending headers: {headers}")  # Debug headers
+                print(f"Sending file: {filename}, size: {os.path.getsize(self.excel_file)} bytes, mimetype: {mimetype}")  # Debug
                 response = requests.post(
-                    "http://127.0.0.1:10000/api/upload_violation_types",  # Local URL
+                    "https://my-server-fvfu.onrender.com/api/upload_violation_types",
                     files=files,
                     headers=headers,
                     timeout=30
                 )
-                print(f"Response status: {response.status_code}, text: {response.text}")  # Debug full response
+                print(f"Response status: {response.status_code}, text: {response.text}")  # Debug response
                 response.raise_for_status()
                 result = response.json()
                 if 'message' in result:

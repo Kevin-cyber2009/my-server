@@ -95,7 +95,7 @@ class LoginWindow(QWidget):
             response = self.login(username, password)
             if 'token' in response:
                 QMessageBox.information(self, "Thành công", "Đăng nhập thành công!")
-                self.open_main_window(username)
+                self.open_main_window(username, response['token'])  # Truyền cả username và token
             else:
                 QMessageBox.critical(self, "Lỗi", response.get('error', "Đăng nhập thất bại!"))
         else:
@@ -139,8 +139,8 @@ class LoginWindow(QWidget):
         except RequestException as e:
             return {"error": str(e)}
 
-    def open_main_window(self, username):
+    def open_main_window(self, username, token):
         """Mở cửa sổ chính sau khi đăng nhập"""
-        self.main_window = MainWindow(username)
+        self.main_window = MainWindow(username, token)
         self.main_window.show()
         self.close()

@@ -15,9 +15,9 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- Activity chính là MainActivity -->
+        <!-- LoginActivity as launcher -->
         <activity
-            android:name=".MainActivity"
+            android:name=".LoginActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -25,7 +25,9 @@
             </intent-filter>
         </activity>
 
-        <!-- SelectionActivity (nếu cần) -->
+        <!-- MainActivity (no launcher intent-filter) -->
+        <activity android:name=".MainActivity" />
+
     </application>
 
 </manifest>

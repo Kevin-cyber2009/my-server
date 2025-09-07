@@ -9,9 +9,10 @@ import sqlite3
 from utils.email_scheduler import start_email_scheduler
 
 class MainWindow(QMainWindow):
-    def __init__(self, username):
+    def __init__(self, username, token):
         super().__init__()
         self.username = username
+        self.token = token
         self.setWindowTitle("Hệ Thống Quản Lý Thi Đua")
         self.resize(600, 400)
         self.setup_ui()
@@ -61,7 +62,7 @@ class MainWindow(QMainWindow):
         upload_button.setIcon(QIcon("resources/upload.png"))
         upload_button.setIconSize(QSize(64, 64))
         upload_button.setFixedSize(button_size)
-        upload_button.clicked.connect(self.open_upload)
+        upload_button.clicked.connect(self.open_upload_window)  # Sửa thành open_upload_window
         layout.addWidget(upload_button, 2, 0)
 
         # Nút Thống kê
@@ -84,9 +85,8 @@ class MainWindow(QMainWindow):
         self.qr_window = QRWindow(self.username, self.conn)
         self.qr_window.show()
 
-    def open_upload(self):
-        """Mở cửa sổ upload nội quy"""
-        self.upload_window = UploadWindow(self.username, self.conn)
+    def open_upload_window(self):
+        self.upload_window = UploadWindow(self.username, self.token)  # Truyền token đúng
         self.upload_window.show()
 
     def open_stats(self):

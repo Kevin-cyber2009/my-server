@@ -43,7 +43,10 @@ import retrofit2.http.GET;
 import retrofit2.http.POST;
 import retrofit2.http.Path;
 
-// Retrofit API
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.logging.HttpLoggingInterceptor;
+import android.content.SharedPreferences;
 interface ApiService {
     @GET("/api/schools")
     Call<List<School>> getSchools();
@@ -114,8 +117,27 @@ public class MainActivity extends AppCompatActivity {
                 .build();
 
         // Khởi tạo Retrofit
+        HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
+        logging.setLevel(HttpLoggingInterceptor.Level.BODY);  // Debug log API
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .addInterceptor(chain -> {
+                    SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+                    String token = prefs.getString("auth_token", "");
+                    Request request = chain.request();
+                    if (!token.isEmpty()) {
+                        request = request.newBuilder()
+                                .addHeader("Authorization", "Bearer " + token)
+                                .build();
+                    }
+                    return chain.proceed(request);
+                })
+                .addInterceptor(logging)
+                .build();
+
         retrofit = new Retrofit.Builder()
                 .baseUrl("https://my-server-fvfu.onrender.com/")
+                .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
         apiService = retrofit.create(ApiService.class);

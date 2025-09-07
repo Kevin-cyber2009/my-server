@@ -372,21 +372,40 @@ def get_report(school_id):
 
 # Endpoint sync từ app Android
 @app.route('/api/sync/db', methods=['POST'])
-@jwt_required()
 def update_db():
-    school_id = get_jwt_identity()
+    logger.debug("Sync request received")
     data = request.json
     if not data or 'violations' not in data:
+        logger.error("No violations data")
         return jsonify({"error": "No violations data"}), 400
 
     try:
-        for violation in data['violations']:
+        violations = data['violations']
+        if not violations:
+            return jsonify({"message": "No violations to sync"}), 200
+
+        # Lấy school_name từ violation đầu, query school_id
+        school_name = violations[0].get('school_name')
+        school = School.query.filter_by(name=school_name).first()
+        if not school:
+            logger.error(f"School not found for name: {school_name}")
+            return jsonify({'error': f'School {school_name} not found'}), 404
+        school_id = school.id
+
+        for violation in violations:
             student_id = violation.get('student_id')
             student = Student.query.get(student_id)
             if not student:
+                logger.error(f"Student {student_id} not found")
                 return jsonify({'error': f'Student {student_id} not found'}), 404
 
-            violation_date = datetime.strptime(violation['violation_date'], '%Y-%m-%d')
+            violation_date_str = violation['violation_date']
+            try:
+                violation_date = datetime.strptime(violation_date_str, '%Y-%m-%d')
+            except ValueError:
+                logger.error(f"Invalid date format: {violation_date_str}")
+                return jsonify({'error': 'Invalid date format'}), 400
+
             new_violation = Violation(
                 school_id=school_id,
                 student_id=student_id,
@@ -398,9 +417,11 @@ def update_db():
             )
             db.session.add(new_violation)
         db.session.commit()
+        logger.info(f"Synced {len(violations)} violations for school_id: {school_id}")
         return jsonify({"message": "Data updated successfully"}), 200
     except Exception as e:
         db.session.rollback()
+        logger.error(f"Sync error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
