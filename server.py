@@ -16,7 +16,7 @@ import bcrypt
 import logging
 
 # Cấu hình logging
-logging.basicConfig(level=logging.DEBUG)  # Đảm bảo DEBUG
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -173,24 +173,21 @@ def get_schools():
 
 # Lấy quy định vi phạm
 @app.route('/api/violation_types/<school_name>', methods=['GET'])
-@jwt_required()
 def get_violation_types(school_name):
+    logger.debug(f"Request to get violation types for school_name: {school_name}")
     school = School.query.filter_by(name=school_name).first()
-    if not school or get_jwt_identity() != school.id:
-        return jsonify({'error': 'Unauthorized'}), 401
+    if not school:
+        logger.error(f"School not found for name: {school_name}")
+        return jsonify({'error': 'School not found'}), 404
     violation_types = ViolationType.query.filter_by(school_id=school.id).all()
     return jsonify([{'name': v.name, 'points': v.points_deducted} for v in violation_types]), 200
 
 # Upload quy định vi phạm
-# Endpoint upload_violation_types
 @app.route('/api/upload_violation_types', methods=['POST'])
 @jwt_required()
 def upload_violation_types():
     school_id = get_jwt_identity()
     logger.debug(f"Upload request from school_id: {school_id}")
-    logger.debug(f"Request headers: {request.headers}")
-    logger.debug(f"Request content_type: {request.content_type}")
-    logger.debug(f"Request files: {request.files}")
     if 'file' not in request.files:
         logger.error("No file in request")
         return jsonify({'error': 'No file uploaded'}), 400
@@ -384,7 +381,6 @@ def update_db():
         if not violations:
             return jsonify({"message": "No violations to sync"}), 200
 
-        # Lấy school_name từ violation đầu, query school_id
         school_name = violations[0].get('school_name')
         school = School.query.filter_by(name=school_name).first()
         if not school:
@@ -396,8 +392,25 @@ def update_db():
             student_id = violation.get('student_id')
             student = Student.query.get(student_id)
             if not student:
-                logger.error(f"Student {student_id} not found")
-                return jsonify({'error': f'Student {student_id} not found'}), 404
+                # Tạo student mới nếu không tồn tại
+                student_name = violation.get('student_name')
+                class_name = violation.get('class_name')
+                dob = violation.get('dob')
+                gender = violation.get('gender')
+                if not all([student_name, class_name, dob, gender]):
+                    logger.error(f"Missing student info for {student_id}")
+                    return jsonify({'error': 'Missing student info to create new student'}), 400
+                new_student = Student(
+                    id=student_id,
+                    school_id=school_id,
+                    name=student_name,
+                    class_name=class_name,
+                    birthdate=dob,
+                    gender=gender
+                )
+                db.session.add(new_student)
+                db.session.commit()  # Commit student trước
+                logger.info(f"Created new student {student_id}")
 
             violation_date_str = violation['violation_date']
             try:
@@ -426,5 +439,5 @@ def update_db():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port, debug=True)  # Thêm debug=True cho local log chi tiết
+    app.run(host='0.0.0.0', port=port, debug=True)
     logger.info("Server started successfully with configured environment variables")

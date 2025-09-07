@@ -47,6 +47,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.logging.HttpLoggingInterceptor;
 import android.content.SharedPreferences;
+
 interface ApiService {
     @GET("/api/schools")
     Call<List<School>> getSchools();
@@ -105,6 +106,10 @@ public class MainActivity extends AppCompatActivity {
     private MaterialCardView violationCard;
     private MaterialCardView manualInputCard;
     private String currentStudentId;
+    private String currentStudentName;
+    private String currentClassName;
+    private String currentDob;
+    private String currentGender;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
 
     @Override
@@ -208,6 +213,10 @@ public class MainActivity extends AppCompatActivity {
 
             String schoolName = schoolSpinner.getSelectedItem() != null ? schoolSpinner.getSelectedItem().toString() : "";
             currentStudentId = schoolName + "_" + fullName.hashCode();
+            currentStudentName = fullName;
+            currentClassName = className;
+            currentDob = dob;
+            currentGender = gender;
             studentInfoText.setText("Học sinh: " + fullName + ", Lớp: " + className + ", Ngày sinh: " + dob + ", Giới tính: " + gender);
 
             AlphaAnimation fadeOut = new AlphaAnimation(1.0f, 0.0f);
@@ -321,6 +330,10 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 currentStudentId = schoolName + "_" + fullName.hashCode();
+                currentStudentName = fullName;
+                currentClassName = className;
+                currentDob = dob;
+                currentGender = gender;
                 studentInfoText.setText("Học sinh: " + fullName + ", Lớp: " + className + ", Ngày sinh: " + dob + ", Giới tính: " + gender);
                 violationCard.setVisibility(View.VISIBLE);
                 AlphaAnimation fadeIn = new AlphaAnimation(0.0f, 1.0f);
@@ -349,7 +362,7 @@ public class MainActivity extends AppCompatActivity {
         String violationType = violationItem.substring(0, violationItem.indexOf(" (-"));
         int points = Integer.parseInt(violationItem.substring(violationItem.indexOf("(-") + 2, violationItem.indexOf(")")));
         String date = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
-        Violation violation = new Violation(currentStudentId, violationType, points, date, schoolName, recorderName, recorderClass);
+        Violation violation = new Violation(currentStudentId, currentStudentName, currentClassName, currentDob, currentGender, violationType, points, date, schoolName, recorderName, recorderClass);
 
         executor.execute(() -> {
             db.violationDao().insert(violation);
