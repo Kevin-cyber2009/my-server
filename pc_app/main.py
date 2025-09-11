@@ -4,6 +4,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 from ui.login_window import LoginWindow
 import os
+import sqlite3
 
 SERVER_URL = "https://my-server-fvfu.onrender.com"  # URL server Render
 
@@ -70,8 +71,11 @@ if __name__ == "__main__":
         with open("styles/style.qss", "r") as f:
             qt_app.setStyleSheet(f.read())
 
+    # Tạo local DB connection
+    conn = sqlite3.connect("database/school.db")
+
     # Show login window
-    window = LoginWindow()
+    window = LoginWindow(conn)
     window.show()
 
     sys.exit(qt_app.exec())

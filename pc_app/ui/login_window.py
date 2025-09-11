@@ -4,12 +4,14 @@ import requests
 from requests.exceptions import RequestException
 import os
 from ui.main_window import MainWindow
+from utils.email_scheduler import start_email_scheduler  # Import để gọi sau login
 
 SERVER_URL = "https://my-server-fvfu.onrender.com"  # URL server Render
 
 class LoginWindow(QWidget):
-    def __init__(self):
+    def __init__(self, conn):
         super().__init__()
+        self.conn = conn  # Truyền conn từ main để dùng local DB
         self.setWindowTitle("Đăng nhập / Đăng ký")
         self.resize(400, 500)
         self.setup_ui()
@@ -95,7 +97,7 @@ class LoginWindow(QWidget):
             response = self.login(username, password)
             if 'token' in response:
                 QMessageBox.information(self, "Thành công", "Đăng nhập thành công!")
-                self.open_main_window(username, response['token'])  # Truyền cả username và token
+                self.open_main_window(username, response['token'])
             else:
                 QMessageBox.critical(self, "Lỗi", response.get('error', "Đăng nhập thất bại!"))
         else:
@@ -141,6 +143,28 @@ class LoginWindow(QWidget):
 
     def open_main_window(self, username, token):
         """Mở cửa sổ chính sau khi đăng nhập"""
-        self.main_window = MainWindow(username, token)
+        # Insert user info vào local DB trước khi mở main_window
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                report_hour INTEGER NOT NULL,
+                school_name TEXT NOT NULL
+            )
+        """)
+        # Lấy info từ server hoặc input (giả định từ register/login response, hoặc query lại nếu cần)
+        # Ví dụ: Giả định response có email, report_hour, school_name - thay bằng data thực tế
+        cursor.execute("SELECT email, send_hour, name FROM schools WHERE id = (SELECT school_id FROM users WHERE username = ?)", (username,))
+        school_result = cursor.fetchone()
+        if school_result:
+            email, report_hour, school_name = school_result
+            cursor.execute("""
+                INSERT OR REPLACE INTO users (username, email, report_hour, school_name)
+                VALUES (?, ?, ?, ?)
+            """, (username, email, report_hour, school_name))
+            self.conn.commit()
+
+        self.main_window = MainWindow(username, token, self.conn)  # Truyền conn cho main_window nếu cần
         self.main_window.show()
         self.close()

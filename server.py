@@ -437,6 +437,20 @@ def update_db():
         logger.error(f"Sync error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
+# Endpoint để lấy school info (cho client local DB)
+@app.route('/api/school_info', methods=['GET'])
+@jwt_required()
+def get_school_info():
+    school_id = get_jwt_identity()
+    school = School.query.get(school_id)
+    if not school:
+        return jsonify({'error': 'School not found'}), 404
+    return jsonify({
+        'name': school.name,
+        'email': school.email,
+        'send_hour': school.send_hour
+    }), 200
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port, debug=True)

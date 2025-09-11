@@ -1,6 +1,5 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog, QMessageBox
 from PySide6.QtCore import Qt
-import sqlite3
 from utils.excel_handler import read_student_excel
 from utils.qr_generator import generate_qr_codes
 
@@ -8,8 +7,7 @@ class QRWindow(QWidget):
     def __init__(self, username, conn):
         super().__init__()
         self.username = username
-        self.conn = conn
-        self.cursor = conn.cursor()
+        self.conn = conn  # Giữ nếu cần cho chức năng khác, nhưng không dùng cho QR
         self.setWindowTitle("Tạo Mã QR")
         self.resize(400, 300)
         self.setup_ui()
@@ -42,7 +40,7 @@ class QRWindow(QWidget):
     def select_excel_file(self):
         """Mở hộp thoại chọn file Excel"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Chọn File Excel", "", "Excel Files (*.xlsx *.xls)"
+            self, "Chọn File Excel", "", "Excel Files (*.xlsx *.xls *.csv)"
         )
         if file_path:
             self.excel_file = file_path
@@ -52,9 +50,8 @@ class QRWindow(QWidget):
     def generate_qr_codes(self):
         """Tạo mã QR từ file Excel và lưu vào thư mục"""
         try:
-            # Lấy tên trường từ bảng users
-            self.cursor.execute("SELECT school_name FROM users WHERE username = ?", (self.username,))
-            school_name = self.cursor.fetchone()[0]
+            # Không cần school_name nữa - truyền empty string
+            school_name = ""
 
             # Đọc file Excel
             students_data, error = read_student_excel(self.excel_file, school_name)
@@ -62,9 +59,9 @@ class QRWindow(QWidget):
                 QMessageBox.critical(self, "Lỗi", error)
                 return
 
-            # Tạo mã QR
+            # Tạo mã QR - dùng folder chung "qr_codes"
             if generate_qr_codes(students_data, school_name):
-                QMessageBox.information(self, "Thành công", f"Đã tạo mã QR và lưu vào qr_codes/{school_name}")
+                QMessageBox.information(self, "Thành công", f"Đã tạo mã QR và lưu vào qr_codes")
             else:
                 QMessageBox.critical(self, "Lỗi", "Có lỗi khi tạo mã QR!")
 
