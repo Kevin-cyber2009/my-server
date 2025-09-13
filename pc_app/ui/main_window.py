@@ -7,21 +7,27 @@ from ui.upload_window import UploadWindow
 from ui.stats_window import StatsWindow
 import sqlite3
 from utils.email_scheduler import start_email_scheduler
+import logging  # Thêm import logging
+
+# Cấu hình logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)  # Định nghĩa logger
 
 class MainWindow(QMainWindow):
-    def __init__(self, username, token):
+    def __init__(self, username, token, conn, email=None):
         super().__init__()
         self.username = username
         self.token = token
+        self.conn = conn
+        self.email = email
         self.setWindowTitle("Hệ Thống Quản Lý Thi Đua")
         self.resize(600, 400)
         self.setup_ui()
         self.setup_database()
-        start_email_scheduler(self.username, self.conn)  # Khởi động scheduler
+        # Xóa start_email_scheduler ở đây để tránh duplicate - gọi chỉ ở login_window
 
     def setup_database(self):
         """Kết nối cơ sở dữ liệu SQLite"""
-        self.conn = sqlite3.connect("database/school.db")
         self.cursor = self.conn.cursor()
 
     def setup_ui(self):
@@ -62,7 +68,7 @@ class MainWindow(QMainWindow):
         upload_button.setIcon(QIcon("resources/upload.png"))
         upload_button.setIconSize(QSize(64, 64))
         upload_button.setFixedSize(button_size)
-        upload_button.clicked.connect(self.open_upload_window)  # Sửa thành open_upload_window
+        upload_button.clicked.connect(self.open_upload_window)
         layout.addWidget(upload_button, 2, 0)
 
         # Nút Thống kê
@@ -86,7 +92,7 @@ class MainWindow(QMainWindow):
         self.qr_window.show()
 
     def open_upload_window(self):
-        self.upload_window = UploadWindow(self.username, self.token)  # Truyền token đúng
+        self.upload_window = UploadWindow(self.username, self.token)
         self.upload_window.show()
 
     def open_stats(self):

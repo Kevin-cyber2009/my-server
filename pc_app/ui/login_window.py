@@ -3,10 +3,17 @@ from PySide6.QtCore import Qt
 import requests
 from requests.exceptions import RequestException
 import os
+import jwt  # pip install pyjwt
+import logging  # Import logging
 from ui.main_window import MainWindow
-from utils.email_scheduler import start_email_scheduler  # Import để gọi sau login
+# Xóa import start_email_scheduler ở đây, gọi ở MainWindow
 
 SERVER_URL = "https://my-server-fvfu.onrender.com"  # URL server Render
+JWT_SECRET = "my-secret-key-1234567890abcdef1234567890abcdef"  # Đặt đúng secret từ server
+
+# Cấu hình logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)  # Định nghĩa logger
 
 class LoginWindow(QWidget):
     def __init__(self, conn):
@@ -143,28 +150,59 @@ class LoginWindow(QWidget):
 
     def open_main_window(self, username, token):
         """Mở cửa sổ chính sau khi đăng nhập"""
-        # Insert user info vào local DB trước khi mở main_window
         cursor = self.conn.cursor()
+
+        # Tạo table users và schools nếu chưa tồn tại
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
-                email TEXT NOT NULL,
-                report_hour INTEGER NOT NULL,
-                school_name TEXT NOT NULL
+                email TEXT,
+                report_hour INTEGER,
+                school_name TEXT
             )
         """)
-        # Lấy info từ server hoặc input (giả định từ register/login response, hoặc query lại nếu cần)
-        # Ví dụ: Giả định response có email, report_hour, school_name - thay bằng data thực tế
-        cursor.execute("SELECT email, send_hour, name FROM schools WHERE id = (SELECT school_id FROM users WHERE username = ?)", (username,))
-        school_result = cursor.fetchone()
-        if school_result:
-            email, report_hour, school_name = school_result
-            cursor.execute("""
-                INSERT OR REPLACE INTO users (username, email, report_hour, school_name)
-                VALUES (?, ?, ?, ?)
-            """, (username, email, report_hour, school_name))
-            self.conn.commit()
 
-        self.main_window = MainWindow(username, token, self.conn)  # Truyền conn cho main_window nếu cần
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schools (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                email TEXT,
+                send_hour INTEGER
+            )
+        """)
+
+        # Decode token để lấy school_id
+        try:
+            decoded = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+            school_id = decoded['sub']  # Identity = school_id
+        except jwt.InvalidTokenError:
+            school_id = None
+            logger.error("Invalid token")
+
+        if school_id:
+            # Gọi API để lấy school info
+            headers = {"Authorization": f"Bearer {token}"}
+            response = requests.get(f"{SERVER_URL}/api/school_info", headers=headers)
+            if response.status_code == 200:
+                school_info = response.json()
+                # Insert into schools
+                cursor.execute("""
+                    INSERT OR REPLACE INTO schools (id, name, email, send_hour)
+                    VALUES (?, ?, ?, ?)
+                """, (school_id, school_info['name'], school_info['email'], school_info['send_hour']))
+                # Insert into users
+                cursor.execute("""
+                    INSERT OR REPLACE INTO users (username, email, report_hour, school_name)
+                    VALUES (?, ?, ?, ?)
+                """, (username, school_info['email'], school_info['send_hour'], school_info['name']))
+                self.conn.commit()
+                logger.info("User and school info inserted to local DB")
+
+        # Truyền email cho MainWindow nếu cần (query sau insert)
+        cursor.execute("SELECT email FROM users WHERE username = ?", (username,))
+        email_result = cursor.fetchone()
+        main_email = email_result[0] if email_result else None
+
+        self.main_window = MainWindow(username, token, self.conn, main_email)
         self.main_window.show()
         self.close()
