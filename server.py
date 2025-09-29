@@ -27,6 +27,10 @@ def index():
 # Cấu hình
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///school.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,  # Check connection alive
+    'pool_recycle': 300  # Recycle idle every 5 min
+}
 app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET', 'my-secret-key-1234567890abcdef1234567890abcdef')
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
