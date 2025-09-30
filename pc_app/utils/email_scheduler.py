@@ -1,4 +1,5 @@
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 import sqlite3
 from datetime import datetime
 import smtplib
@@ -23,24 +24,17 @@ def setup_email_scheduler(username, conn):
         username: Username của người dùng
         conn: Kết nối SQLite
     """
-    scheduler = BackgroundScheduler(timezone='Asia/Ho_Chi_Minh')
+    jobstores = {
+        'default': SQLAlchemyJobStore(url='sqlite:///jobs.db')  # Persistent job store
+    }
+    scheduler = BackgroundScheduler(jobstores=jobstores, timezone='Asia/Ho_Chi_Minh')
     cursor = conn.cursor()
-
-    # Tạo table users nếu chưa tồn tại
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            email TEXT NOT NULL,
-            report_hour INTEGER NOT NULL,
-            school_name TEXT NOT NULL
-        )
-    """)
 
     cursor.execute("SELECT email, report_hour, school_name FROM users WHERE username = ?", (username,))
     result = cursor.fetchone()
     if not result:
         logger.error(f"Không tìm thấy thông tin người dùng {username} trong local DB")
-        return
+        return None
 
     email, report_hour, school_name = result
 
@@ -53,6 +47,12 @@ def setup_email_scheduler(username, conn):
             if not success:
                 logger.error(f"Error generating report: {error}")
                 return
+
+            if not os.path.exists(excel_file):
+                logger.error("Excel file not found after generation")
+                return
+
+            logger.info(f"Generating report for {school_name} on {today}")
 
             msg = MIMEMultipart()
             msg['From'] = os.getenv('GMAIL_USERNAME')
@@ -79,8 +79,9 @@ def setup_email_scheduler(username, conn):
         except Exception as e:
             logger.error(f"Error sending email: {str(e)}")
 
-    scheduler.add_job(send_daily_report, 'cron', hour=int(report_hour), minute=0)
+    scheduler.add_job(send_daily_report, 'cron', hour=int(report_hour), minute=0, replace_existing=True)  # Replace if exists
     scheduler.start()
+    logger.info("Scheduler started with daily job added")
     return scheduler
 
 def start_email_scheduler(username, conn, email, report_hour, school_name):

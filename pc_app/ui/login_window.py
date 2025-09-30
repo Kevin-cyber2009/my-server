@@ -107,7 +107,7 @@ class LoginWindow(QWidget):
                 self.open_main_window(username, response['token'])
             else:
                 QMessageBox.critical(self, "Lỗi", response.get('error', "Đăng nhập thất bại!"))
-        else:            
+        else:
             # Đăng ký qua server
             email = self.email_input.text().strip()
             school = self.school_input.text().strip()
@@ -133,13 +133,13 @@ class LoginWindow(QWidget):
             else:
                 QMessageBox.critical(self, "Lỗi", response.get('error', "Đăng ký thất bại!"))
 
-            def register_school(self, school_data):
-                try:
-                    response = requests.post(f"{SERVER_URL}/api/register_school", json=school_data)
-                    response.raise_for_status()
-                    return response.json()
-                except RequestException as e:
-                    return {"error": str(e)}
+    def register_school(self, school_data):
+        try:
+            response = requests.post(f"{SERVER_URL}/api/register_school", json=school_data)
+            response.raise_for_status()
+            return response.json()
+        except RequestException as e:
+            return {"error": str(e)}
 
     def login(self, username, password):
         try:
@@ -209,8 +209,6 @@ class LoginWindow(QWidget):
         else:
             logger.warning("No user info in local DB, skipping scheduler")
 
-        # Truyền email cho MainWindow nếu cần
-        main_email = email if result else None
-        self.main_window = MainWindow(username, token, self.conn, main_email)
+        self.main_window = MainWindow(username, token, self.conn)
         self.main_window.show()
         self.close()

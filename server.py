@@ -455,6 +455,22 @@ def get_school_info():
         'send_hour': school.send_hour
     }), 200
 
+# Endpoint để lấy violations (cho PC sync)
+@app.route('/api/violations', methods=['GET'])
+@jwt_required()
+def get_violations():
+    school_id = get_jwt_identity()
+    violations = Violation.query.filter_by(school_id=school_id).all()
+    data = [{
+        'student_id': v.student_id,
+        'violation_type': v.violation_type,
+        'points_deducted': v.points_deducted,
+        'violation_date': v.violation_date.isoformat(),
+        'recorder_name': v.recorder_name,
+        'recorder_class': v.recorder_class
+    } for v in violations]
+    return jsonify(data), 200
+
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port, debug=True)

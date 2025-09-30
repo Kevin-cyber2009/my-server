@@ -119,6 +119,7 @@ public class MainActivity extends AppCompatActivity {
 
         // Khởi tạo Room DB
         db = Room.databaseBuilder(getApplicationContext(), AppDatabase.class, "app_database")
+                .addMigrations(AppDatabase.MIGRATION_1_2)
                 .build();
 
         // Khởi tạo Retrofit
